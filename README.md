@@ -155,3 +155,13 @@ PhishShield-AI-Guardian/
 ## 📜 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+### Local API tests and data handling
+
+Install `requirements-dev.txt` to run `python -m pytest -q`. The API tests use
+the checked-in classifier and synthetic example URLs with network requests
+disabled. Use model artifacts only from a trusted checkout. The extension's
+prediction request sends the URL to the configured backend. Avoid using it
+with sensitive URLs until you have reviewed the backend and browser settings.
+A SAFE classification is a risk estimate and should not be used as an access
+control or an assurance that a page is benign.

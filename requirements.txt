@@ -1,9 +1,10 @@
-fastapi==0.111.0
+fastapi==0.165.0
 uvicorn[standard]==0.29.0
 scikit-learn==1.8.0
 numpy==1.26.4
 pandas==2.2.2
 python-levenshtein==0.25.1
-requests==2.31.0
+requests==2.34.2
 joblib==1.4.2
 # cache-bust-1
+starlette==1.10.0
