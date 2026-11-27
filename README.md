@@ -165,3 +165,8 @@ prediction request sends the URL to the configured backend. Avoid using it
 with sensitive URLs until you have reviewed the backend and browser settings.
 A SAFE classification is a risk estimate and should not be used as an access
 control or an assurance that a page is benign.
+
+The extension removes URL user information and fragments before prediction.
+The remaining request URL, including path and query, is sent to the configured
+prediction service. Run `node --test tests/background.test.cjs` to check the
+service-worker request and offline behavior against a controlled backend.
