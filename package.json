@@ -1,0 +1,11 @@
+{
+  "name": "phishshield-extension-verification",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/background.test.cjs",
+    "test:browser": "node tests/extension-browser.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.65.1"
+  }
+}

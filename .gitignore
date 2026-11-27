@@ -14,3 +14,4 @@ Thumbs.db
 .idea/
 *.log
 "@ | Out-File -FilePath "C:\Users\Admin pc\Desktop\phishshield-extension\.gitignore" -Encoding utf8
+node_modules/

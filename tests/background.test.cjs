@@ -24,8 +24,8 @@ function evaluate(url, fetch) {
 }
 
 test('keeps local warnings and strips URL credentials and fragment', async () => {
-  const result = await evaluate('http://test:example@example.test/path#private', async (_url, options) => {
-    assert.equal(JSON.parse(options.body).url, 'http://example.test/path');
+  const result = await evaluate('http://test:example@example.test/path?sample=private#private', async (_url, options) => {
+    assert.equal(JSON.parse(options.body).url, 'http://example.test/');
     return { ok: true, json: async () => ({ status: 'SAFE', whitelist: true, score: 0 }) };
   });
   assert.equal(result.riskScore, 65);
@@ -41,4 +41,12 @@ test('preserves local warning when the backend fails', async () => {
 test('does not submit unsupported browser URLs', async () => {
   const result = await evaluate('file:///example', () => assert.fail('unexpected backend request'));
   assert.ok(result.triggeredMitigations.includes('Unsupported URL'));
+});
+
+test('adds local path signals without transmitting the full path or query', async () => {
+  const result = await evaluate('https://example.test/account/verify?sample=private', async (_url, options) => {
+    assert.equal(JSON.parse(options.body).url, 'https://example.test/');
+    return { ok: true, json: async () => ({ status: 'SUSPICIOUS', score: 55, flags: [] }) };
+  });
+  assert.equal(result.riskScore, 75);
 });

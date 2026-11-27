@@ -23,7 +23,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const domain = typeof data?.domainName === "string" ? data.domainName : "";
     let url;
     try {
-      url = new URL(sender.tab?.url || data?.pageUrl || ("http://" + domain));
+      url = new URL(data?.pageUrl || sender.tab?.url || ("http://" + domain));
       if (!["http:", "https:"].includes(url.protocol)) throw new Error("Unsupported protocol");
     } catch (_) {
       sendResponse({ riskScore: 0, triggeredMitigations: ["Unsupported URL"] });
@@ -40,10 +40,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       computedRiskScore += 35;
       activatedAlertFlags.push("Insecure Cleartext Transmission (HTTP + Password Field)");
     }
-    url.username = "";
-    url.password = "";
-    url.hash = "";
-    const requestUrl = url.href;
+    const localTerms = new Set();
+    const segments = url.pathname.split(/[\W_]+/).slice(0, 32);
+    for (const term of segments) {
+      if (/^(login|verify|reset|secure|password|confirm|account)$/i.test(term)) {
+        localTerms.add(term.toLowerCase());
+      }
+    }
+    if (localTerms.size >= 2) {
+      computedRiskScore += 20;
+      activatedAlertFlags.push("Multiple account-related terms in the page path");
+    }
+
+    // The remote classifier only receives scheme, hostname and port.
+    const requestUrl = url.origin + "/";
     const requestKey = JSON.stringify([requestUrl, computedRiskScore]);
     if (pendingRequests.has(requestKey)) {
       sendResponse({ riskScore: computedRiskScore, triggeredMitigations: [...activatedAlertFlags, "Scan already in progress"] });

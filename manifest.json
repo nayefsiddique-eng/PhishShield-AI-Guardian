@@ -5,16 +5,10 @@
   "description": "Enterprise-grade real-time phishing and e-commerce fraud mitigation engine.",
   "permissions": [
     "activeTab",
-    "storage",
-    "notifications",
-    "tabs"
+    "storage"
   ],
   "host_permissions": [
-    "https://phishshield-ai-guardian-production.up.railway.app/*",
-    "http://127.0.0.1/*",
-    "http://localhost/*",
-    "http://*/*",
-    "https://*/*"
+    "https://phishshield-ai-guardian-production.up.railway.app/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -25,7 +19,9 @@
         "http://*/*",
         "https://*/*"
       ],
-      "js": ["content.js"],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_start"
     }
   ],

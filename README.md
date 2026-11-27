@@ -166,7 +166,26 @@ with sensitive URLs until you have reviewed the backend and browser settings.
 A SAFE classification is a risk estimate and should not be used as an access
 control or an assurance that a page is benign.
 
-The extension removes URL user information and fragments before prediction.
-The remaining request URL, including path and query, is sent to the configured
-prediction service. Run `node --test tests/background.test.cjs` to check the
-service-worker request and offline behavior against a controlled backend.
+The extension submits only the page origin to the prediction service.
+It evaluates selected path patterns locally and keeps local warnings when the
+service is unavailable. Paths, queries, fragments and URL user information
+remain in the browser. Origin-only classification changes the inputs to the
+existing model. The accuracy impact has not been established on a benchmark.
+
+Run `node --test tests/background.test.cjs` to check service-worker behavior.
+For a Chromium smoke test, load the packaged ZIP contents as an unpacked
+extension in a test profile and use an isolated backend and synthetic websites.
+The production package keeps the configured HTTPS prediction service.
+
+For the installed-extension check, run `npm ci` and
+`npx playwright install chromium --no-shell`. In a separate terminal start
+`python -m uvicorn server:app --host 127.0.0.1 --port 8758`, then run
+`npm run test:browser`. The harness uses a temporary extension profile and
+replaces the API address in its test copy. It verifies the shipped model on
+loopback. It uses controlled responses for warning and provider failure
+scenarios and aborts a stalled provider request. It never calls Railway.
+
+Build the extension ZIP with `python scripts/package-extension.py`. Extract
+it, open `chrome://extensions`, enable developer mode, then use **Load unpacked**
+and select the extracted directory containing `manifest.json`. The ZIP
+contains extension runtime files only. No marketplace publication is required.
