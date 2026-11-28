@@ -1,0 +1,48 @@
+name: PhishShield verification
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install and test backend and service worker
+        run: |
+          python -m pip install -r requirements-dev.txt
+          npm ci
+          python -m pytest -q
+          npm test
+      - name: Verify the installed Chromium extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium --no-shell
+          python -m uvicorn server:app --host 127.0.0.1 --port 8758 > "${RUNNER_TEMP}/phishshield-test-api.log" 2>&1 &
+          api=$!
+          trap 'kill "$api" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8758/ >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8758/ >/dev/null
+          npm run test:browser
+      - name: Produce unpacked extension ZIP
+        run: python scripts/package-extension.py "${RUNNER_TEMP}/PHISHSHIELD_EXTENSION.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phishshield-extension
+          path: ${{ runner.temp }}/PHISHSHIELD_EXTENSION.zip
+          if-no-files-found: error

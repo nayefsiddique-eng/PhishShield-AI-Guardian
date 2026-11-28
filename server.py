@@ -5,11 +5,13 @@ ML + Heuristic + Trusted Whitelist phishing detection engine
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from ipaddress import ip_address
 from pydantic import BaseModel
 import joblib
 import os
 import re
 import math
+import pandas as pd
 import Levenshtein
 from urllib.parse import urlparse
 import requests
@@ -111,10 +113,8 @@ SAFE_TLD_SUFFIXES = {
     ".nic.in",
 }
 
-def is_trusted(url: str) -> bool:
-    """Return True if domain is whitelisted OR ends with an institutional TLD."""
-    url = str(url).strip().lower()
-    domain = re.sub(r"https?://", "", url).split("/")[0].split(":")[0]
+def is_trusted(domain: str) -> bool:
+    """Check the parsed hostname against the whitelist and institutional suffixes."""
 
     # Institutional TLD check (e.g. anything.gov.in, anything.ac.uk)
     for suffix in SAFE_TLD_SUFFIXES:
@@ -141,7 +141,7 @@ def get_entropy(s: str) -> float:
 
 
 def strip_www(url: str) -> str:
-    return re.sub(r"^(https?://)www\.", r"\1", url)
+    return re.sub(r"^(https?://)www\.", r"\1", url, flags=re.IGNORECASE)
 
 
 def extract_features_dict(url: str) -> dict:
@@ -264,7 +264,7 @@ def validate_model(model, scaler) -> int:
     """Returns google.com ML score — should be 0 after whitelist bypass."""
     test = extract_features_dict("https://google.com/")
     test_vals = [test[f] for f in FEATURE_COLS]
-    scaled = scaler.transform([test_vals])
+    scaled = scaler.transform(pd.DataFrame([test_vals], columns=FEATURE_COLS))
     score = round(float(model.predict_proba(scaled)[0][1]) * 100)
     print(f"[PhishShield] ML validation — google.com raw ML: {score}%")
     return score
@@ -402,25 +402,38 @@ async def predict(payload: URLPayload):
         raise HTTPException(status_code=400, detail="URL too long")
 
     lower_url = url.lower()
-    if lower_url.startswith(("javascript:", "data:", "file:")):
+    explicit_scheme = re.match(r"^[a-z][a-z0-9+.-]*://", lower_url)
+    if lower_url.startswith(("javascript:", "data:", "file:")) or (
+        explicit_scheme and not lower_url.startswith(("http://", "https://"))
+    ):
         raise HTTPException(status_code=400, detail="Unsupported URL scheme")
 
     normalized_url = url if lower_url.startswith(("http://", "https://")) else "http://" + url
     normalized_url = strip_www(normalized_url)
 
     try:
+        # The classifier and whitelist should agree on the destination hostname.
+        if any(char.isspace() or ord(char) < 32 for char in normalized_url):
+            raise ValueError("Whitespace or control character in URL")
         parsed = urlparse(normalized_url)
-        domain = parsed.netloc or parsed.path
-    except Exception as exc:
+        if not parsed.hostname or "\\" in parsed.netloc:
+            raise ValueError("Invalid hostname")
+        parsed.port  # Validate the optional port.
+        domain = parsed.hostname.removesuffix(".")
+        try:
+            ip_address(domain)
+        except ValueError:
+            domain = domain.encode("idna").decode("ascii").lower()
+            label_pattern = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+            if len(domain) > 253 or not all(
+                re.fullmatch(label_pattern, label) for label in domain.split(".")
+            ):
+                raise ValueError("Invalid hostname")
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail="Malformed URL") from exc
 
-    if parsed.scheme and parsed.scheme not in {"http", "https"}:
-        raise HTTPException(status_code=400, detail="Only HTTP(S) URLs are supported")
-    if not domain:
-        raise HTTPException(status_code=400, detail="Invalid domain")
-
     # ── WHITELIST CHECK — bypass ML entirely for trusted domains ──────────────
-    if is_trusted(normalized_url):
+    if parsed.username is None and is_trusted(domain):
         return {
             "status": "SAFE",
             "score": 0,
@@ -435,7 +448,7 @@ async def predict(payload: URLPayload):
     # ── ML LAYER ──────────────────────────────────────────────────────────────
     features_dict = extract_features_dict(normalized_url)
     features_list = [features_dict[f] for f in FEATURE_COLS]
-    features_scaled = scaler.transform([features_list])
+    features_scaled = scaler.transform(pd.DataFrame([features_list], columns=FEATURE_COLS))
     ml_prob = float(model.predict_proba(features_scaled)[0][1])
     ml_score = round(ml_prob * 100)
 
